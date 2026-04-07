@@ -1,8 +1,9 @@
 export const onRequest: PagesFunction<{ MCP_SERVER: Fetcher }> = async (context) => {
   const url = new URL(context.request.url);
-  
-  // 1. 處理預檢請求 (Preflight)
-  if (context.request.method === "OPTIONS") {
+  const isPreflight = context.request.method === "OPTIONS";
+
+  // 1. 處理 Preflight
+  if (isPreflight) {
     return new Response(null, {
       headers: {
         "Access-Control-Allow-Origin": "*",
@@ -14,26 +15,23 @@ export const onRequest: PagesFunction<{ MCP_SERVER: Fetcher }> = async (context)
   }
 
   try {
-    // 2. 優先使用 Service Binding (如果已在 Dashboard 設定)
+    let response: Response;
+    // 2. 代理請求
     if (context.env.MCP_SERVER) {
-      const response = await context.env.MCP_SERVER.fetch(context.request.clone());
-      const newResponse = new Response(response.body, response);
-      newResponse.headers.set("Access-Control-Allow-Origin", "*");
-      return newResponse;
+      response = await context.env.MCP_SERVER.fetch(context.request.clone());
+    } else {
+      const targetUrl = `https://u6u-mcp.uncle6-me.workers.dev/sse${url.search}`;
+      response = await fetch(targetUrl, context.request);
     }
 
-    // 3. Fallback 到外網 Fetch
-    const targetUrl = `https://u6u-mcp.uncle6-me.workers.dev/sse${url.search}`;
-    const response = await fetch(targetUrl, {
-      method: context.request.method,
-      headers: context.request.headers,
-      body: context.request.body,
-    });
-
+    // 3. 建立支援 CORS 的回應，並確保串流不被緩存
     const newResponse = new Response(response.body, response);
     newResponse.headers.set("Access-Control-Allow-Origin", "*");
+    newResponse.headers.set("Cache-Control", "no-cache");
+    newResponse.headers.set("Connection", "keep-alive");
+    
     return newResponse;
   } catch (e) {
-    return new Response(`Proxy Error: ${e.message}`, { status: 502 });
+    return new Response(`Proxy Error: ${e.message}`, { status: 502, headers: { "Access-Control-Allow-Origin": "*" } });
   }
 };
