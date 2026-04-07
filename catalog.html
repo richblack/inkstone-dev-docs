@@ -17,15 +17,13 @@
         .params-table th { background: #f5f5f5; }
         code { background: #f0f0f0; padding: 2px 4px; border-radius: 4px; font-family: monospace; }
         .actions { margin-top: 40px; text-align: center; border-top: 1px solid #eee; padding-top: 20px; }
-        .btn { display: inline-block; background: #000; color: white; padding: 10px 20px; text-decoration: none; border-radius: 6px; font-weight: bold; cursor: pointer; border: none; transition: background 0.2s; }
+        .btn { display: inline-block; background: #000; color: white; padding: 10px 20px; text-decoration: none; border-radius: 6px; font-weight: bold; transition: background 0.2s; }
         .btn:hover { background: #333; }
-        .cmd-box { background: #222; color: #fff; padding: 15px; border-radius: 8px; font-family: monospace; font-size: 14px; margin: 15px 0; text-align: left; position: relative; }
-        .copy-hint { font-size: 12px; color: #999; margin-top: 5px; }
     </style>
 </head>
 <body>
     <header>
-        <h1>💎 u6u MCP Tools <span class="badge">v1.0.0</span></h1>
+        <h1>💎 u6u MCP Tools <span class="badge">Live</span></h1>
         <a href="/" style="font-size: 14px; color: #666;">← 回到首頁</a>
     </header>
 
@@ -34,16 +32,14 @@
 
     <div class="actions">
         <h3>想直接測試這些工具嗎？</h3>
-        <p>請在您的終端機執行以下指令，啟動官方 MCP Inspector：</p>
-        <div class="cmd-box" id="cmdText">npx @modelcontextprotocol/inspector --sse https://dev.finally.click/sse</div>
-        <button class="btn" onclick="copyCmd()">複製測試指令</button>
-        <div class="copy-hint" id="copySuccess" style="display:none; color: green;">✅ 已複製到剪貼簿！</div>
+        <p>使用 Cloudflare 官方提供的 MCP Inspector 進行互動式測試。</p>
+        <a href="https://mcp-inspector.pages.dev/?url=https://dev.finally.click/sse" target="_blank" class="btn">啟動官方 MCP Inspector</a>
     </div>
 
     <script>
         async function fetchCatalog() {
             try {
-                // 直接 fetch 代理後的 API
+                // 透過代理取得 JSON
                 const response = await fetch('/tools/catalog');
                 const data = await response.json();
                 renderCatalog(data.tools);
@@ -63,7 +59,7 @@
                 if (tool.parameters) {
                     paramsHtml = `
                         <table class="params-table">
-                            <thead><tr><th>參數</th><th>說明</th></tr></thead>
+                            <thead><tr><th>參數名稱</th><th>說明 / 類型</th></tr></thead>
                             <tbody>
                                 ${Object.entries(tool.parameters).map(([name, desc]) => `
                                     <tr>
@@ -83,15 +79,6 @@
                 `;
                 container.appendChild(card);
             });
-        }
-
-        function copyCmd() {
-            const cmd = document.getElementById('cmdText').innerText;
-            navigator.clipboard.writeText(cmd);
-            document.getElementById('copySuccess').style.display = 'block';
-            setTimeout(() => {
-                document.getElementById('copySuccess').style.display = 'none';
-            }, 2000);
         }
 
         fetchCatalog();
