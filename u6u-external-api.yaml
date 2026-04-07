@@ -1,0 +1,719 @@
+openapi: 3.0.3
+info:
+  title: u6u External APIs
+  description: |
+    完整的 u6u 外部 API 文件。
+
+    **包含三個 Services：**
+    - **workflow.finally.click** — Cypher Executor，工作流定義與執行
+    - **registry.finally.click** — Component Registry，零件倉庫
+    - **credentials.finally.click** — Credentials Manager，認證儲存與注入
+  version: 0.1.0
+  contact:
+    name: InkStone
+    url: https://inkstone.finally.click
+
+servers:
+  - url: https://workflow.finally.click
+    description: Cypher Executor (Workflow Execution)
+  - url: https://registry.finally.click
+    description: Component Registry (Components & Webhooks)
+  - url: https://credentials.finally.click
+    description: Credentials Manager (Credentials Storage)
+
+paths:
+  # ===== Cypher Executor =====
+  /:
+    get:
+      summary: Health Check
+      tags: [Cypher Executor]
+      responses:
+        '200':
+          description: Service is running
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  service:
+                    type: string
+                  version:
+                    type: string
+                  status:
+                    type: string
+
+  /cypher/search:
+    post:
+      summary: 搜尋工作流需要的零件
+      tags: [Cypher Executor]
+      description: |
+        用三元組描述工作流，系統解析並從 Registry 查詢對應零件。
+
+        範例：
+        ```json
+        {
+          "triplets": [
+            "start >> 完成後 >> get-data",
+            "get-data >> 完成後 >> done"
+          ]
+        }
+        ```
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                triplets:
+                  type: array
+                  items:
+                    type: string
+                  description: 三元組陣列，格式："FROM >> ACTION >> TO"
+                auto_publish:
+                  type: boolean
+                  default: true
+                  description: 缺失的零件是否自動產生發佈
+              required: [triplets]
+      responses:
+        '200':
+          description: 零件搜尋成功（含版本號和時戳，適合 Markdown 文檔追蹤）
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  version:
+                    type: string
+                    example: search-v1-20260402-103244
+                    description: 版本號（endpoint-v{major}-{timestamp}），用於追蹤 API 呼叫版本
+                  timestamp:
+                    type: string
+                    format: date-time
+                    description: ISO 8601 時戳
+                  triplets:
+                    type: array
+                    items:
+                      type: string
+                    description: 回送的三元組列表
+                  nodes:
+                    type: object
+                    description: 找到的零件詳情
+                  cypher:
+                    type: object
+                    description: 生成的 Cypher 執行計畫（有缺失零件時為 null）
+                  missing:
+                    type: array
+                    items:
+                      type: string
+                    description: 缺失的零件清單
+                  auto_published:
+                    type: object
+                    description: 自動發佈的零件（若 auto_publish=true）
+                    additionalProperties:
+                      type: object
+                      properties:
+                        ok:
+                          type: boolean
+                        componentId:
+                          type: string
+                        temporary_endpoint:
+                          type: string
+                          format: uri
+                          description: 臨時實作的 URL（24 小時有效）
+                        implement_by:
+                          type: string
+                          format: date-time
+                          description: 實作截止時間
+        '400':
+          description: 無法解析三元組
+
+  /cypher/execute:
+    post:
+      summary: 執行工作流
+      tags: [Cypher Executor]
+      description: |
+        直接執行 triplets，回傳完整執行結果。支援自動發佈缺失零件。
+
+        **推薦使用** — 相比 /cypher/search + 手動組合，此端點一次性完整執行。
+
+        **auto_publish 機制：**
+        - 當工作流中有缺失的零件時，系統可自動產生臨時實作（如果 auto_publish=true）
+        - 臨時實作包含完整的 API endpoint 和實作截止時間
+        - 開發者需在截止時間前替換為正式實作
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                triplets:
+                  type: array
+                  items:
+                    type: string
+                  description: 三元組陣列，格式："FROM >> ACTION >> TO"
+                context:
+                  type: object
+                  description: 執行上下文，傳入各節點作為初始參數
+                auto_publish:
+                  type: boolean
+                  default: true
+                  description: 缺失的零件是否自動產生臨時實作
+              required: [triplets]
+      responses:
+        '200':
+          description: 執行成功（含版本號和時戳）
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  version:
+                    type: string
+                    example: execute-v1-20260402-103244
+                    description: 版本號（endpoint-v{major}-{timestamp}），用於追蹤 API 呼叫版本
+                  timestamp:
+                    type: string
+                    format: date-time
+                    description: ISO 8601 時戳
+                  success:
+                    type: boolean
+                    enum: [true]
+                  data:
+                    type: object
+                    description: 執行結果
+                  trace:
+                    type: array
+                    description: 執行跟蹤
+                  duration_ms:
+                    type: number
+                    description: 執行耗時（毫秒）
+        '500':
+          description: 執行失敗或部份零件缺失（含版本號和時戳）
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  version:
+                    type: string
+                    example: execute-v1-20260402-103244
+                    description: 版本號（endpoint-v{major}-{timestamp}），用於追蹤 API 呼叫版本
+                  timestamp:
+                    type: string
+                    format: date-time
+                    description: ISO 8601 時戳
+                  success:
+                    type: boolean
+                    enum: [false]
+                  error:
+                    type: string
+                  missing:
+                    type: array
+                    items:
+                      type: string
+                    description: 無法自動發佈的缺失零件
+                  auto_published:
+                    type: object
+                    description: 自動發佈的零件資訊
+                    additionalProperties:
+                      type: object
+                      properties:
+                        ok:
+                          type: boolean
+                        componentId:
+                          type: string
+                        temporary_endpoint:
+                          type: string
+                          format: uri
+                          description: 臨時實作的 URL（24 小時有效）
+                        implement_by:
+                          type: string
+                          format: date-time
+                          description: 實作截止時間
+                  duration_ms:
+                    type: number
+
+  /cypher/validate:
+    post:
+      summary: 驗證工作流圖定義
+      tags: [Cypher Executor]
+      description: 不執行工作流，只驗證圖定義是否有效
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                triplets:
+                  type: array
+                  items:
+                    type: string
+      responses:
+        '200':
+          description: 圖定義有效
+        '400':
+          description: 圖定義無效，含錯誤詳情
+
+  /webhooks:
+    post:
+      summary: 建立 Webhook（工作流固化為 HTTP 端點）
+      tags: [Webhooks]
+      description: |
+        將工作流註冊成 Webhook，得到公開 URL。
+
+        調用此 URL 時會執行對應工作流。支援 Cron 排程定時觸發。
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                triplets:
+                  type: array
+                  items:
+                    type: string
+                  description: 工作流三元組
+                description:
+                  type: string
+                  description: Webhook 說明
+                schedule:
+                  type: string
+                  description: |
+                    可選：Cron 排程表達式
+
+                    格式：標準 5-field cron（`minute hour day month weekday`）
+
+                    範例：
+                    - `0 9 * * 1-5` — 工作日 09:00
+                    - `*/5 * * * *` — 每 5 分鐘
+              required: [triplets]
+      responses:
+        '201':
+          description: Webhook 建立成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  token:
+                    type: string
+                    description: Webhook 識別碼
+                  webhook_url:
+                    type: string
+                    format: uri
+                    description: 公開 Webhook URL，可直接 POST 觸發
+                  description:
+                    type: string
+                  created_at:
+                    type: string
+                    format: date-time
+
+    get:
+      summary: 列出所有 Webhooks
+      tags: [Webhooks]
+      parameters:
+        - name: Authorization
+          in: header
+          required: true
+          schema:
+            type: string
+          description: Partner authentication key
+      responses:
+        '200':
+          description: Webhooks 列表
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  webhooks:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        token:
+                          type: string
+                        description:
+                          type: string
+                        created_at:
+                          type: string
+                          format: date-time
+                  total:
+                    type: number
+        '401':
+          description: 未授權（API Key 無效）
+
+  /webhooks/{token}:
+    get:
+      summary: 查詢單個 Webhook
+      tags: [Webhooks]
+      parameters:
+        - name: token
+          in: path
+          required: true
+          schema:
+            type: string
+    delete:
+      summary: 刪除 Webhook
+      tags: [Webhooks]
+      parameters:
+        - name: token
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Webhook 已刪除
+        '404':
+          description: Webhook 不存在
+
+  /webhooks/{token}/trigger:
+    post:
+      summary: 觸發 Webhook 執行
+      tags: [Webhooks]
+      parameters:
+        - name: token
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              description: 觸發時傳入的上下文（會傳給工作流）
+      responses:
+        '200':
+          description: Webhook 已執行
+
+  /docs:
+    get:
+      summary: Swagger UI 互動文檔
+      tags: [Documentation]
+      responses:
+        '200':
+          description: Swagger UI 頁面
+
+  /openapi.json:
+    get:
+      summary: OpenAPI 規格文件
+      tags: [Documentation]
+      responses:
+        '200':
+          description: OpenAPI 3.0 Spec (JSON)
+
+  # ===== Component Registry =====
+  /components:
+    get:
+      summary: 列出所有零件
+      tags: [Components]
+      description: |
+        取得零件倉庫中所有可用零件清單。
+
+        目前包含 ~45 個內建零件，涵蓋：
+        - 流程控制（if, foreach, try-catch）
+        - 字串操作（string-ops）
+        - 數字計算（number-ops）
+        - 陣列處理（array-ops）
+        - 日期時間（date-ops）
+        - AI 轉換（ai-transform）
+        - HTTP 請求（http）
+        - Cron 排程（cron）
+      responses:
+        '200':
+          description: 零件列表
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    id:
+                      type: string
+                      description: 零件唯一識別碼
+                    name:
+                      type: string
+                    description:
+                      type: string
+                    input_schema:
+                      type: object
+                      description: 輸入參數 JSON Schema
+                    output_schema:
+                      type: object
+                      description: 輸出結構 JSON Schema
+                    url:
+                      type: string
+                      format: uri
+                      description: 零件 Worker URL
+
+  /components/search:
+    get:
+      summary: 搜尋零件
+      tags: [Components]
+      parameters:
+        - name: query
+          in: query
+          required: true
+          schema:
+            type: string
+          description: 搜尋關鍵詞（零件名稱或說明）
+      responses:
+        '200':
+          description: 符合的零件列表
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+
+  /components/{id}:
+    get:
+      summary: 查詢特定零件詳情
+      tags: [Components]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: 零件詳細資訊
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: string
+                  name:
+                    type: string
+                  description:
+                    type: string
+                  input_schema:
+                    type: object
+                  output_schema:
+                    type: object
+                  url:
+                    type: string
+                  gherkin:
+                    type: string
+                    description: 零件行為規格（Gherkin 格式）
+
+  /components/publish:
+    post:
+      summary: 發佈新零件到倉庫
+      tags: [Components]
+      description: |
+        上傳自定義零件 Worker 到 Component Registry。
+
+        **必要條件：**
+        - 零件必須是公開 HTTPS endpoint（Cloudflare Workers, AWS Lambda, etc.）
+        - 須附上 Gherkin 規格說明行為預期
+        - 需提供 API Key 認證
+
+        **流程：**
+        1. 部署你的 Worker 取得公開 URL
+        2. 寫 Gherkin 規格（可請 AI 代勞）
+        3. POST 此端點，提供 url + method + gherkin
+        4. 系統驗證並上架
+      parameters:
+        - name: Authorization
+          in: header
+          required: true
+          schema:
+            type: string
+          description: Partner authentication key
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                  description: 零件名稱（英文 kebab-case）
+                description:
+                  type: string
+                  description: 零件簡述
+                url:
+                  type: string
+                  format: uri
+                  description: 公開 Worker URL
+                method:
+                  type: string
+                  enum: [GET, POST]
+                  default: POST
+                  description: HTTP 請求方法
+                gherkin:
+                  type: string
+                  description: |
+                    Gherkin 行為規格
+
+                    範例：
+                    ```
+                    Feature: Get Exchange Rate
+                      Scenario: Convert USD to EUR
+                        Given USD amount is 100
+                        When I fetch latest exchange rates
+                        Then I get current EUR equivalent
+                    ```
+              required: [name, description, url, gherkin]
+      responses:
+        '201':
+          description: 零件已發佈
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: string
+                    description: 新零件 ID
+                  status:
+                    type: string
+                    enum: [pending, approved, rejected]
+        '400':
+          description: 輸入驗證失敗
+        '401':
+          description: 未授權（API Key 無效）
+
+  /components/guide:
+    get:
+      summary: 零件開發指南
+      tags: [Components]
+      description: 幫助開發者編寫 u6u 零件的完整指南
+      responses:
+        '200':
+          description: 開發指南（HTML）
+
+  # ===== Credentials Manager =====
+  /credentials:
+    post:
+      summary: 建立新認證
+      tags: [Credentials]
+      description: |
+        加密儲存認證（API keys, tokens, passwords）。
+
+        認證會被安全加密存入 KV，只有在工作流執行時注入到零件中。
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                  description: 認證識別名稱
+                secret:
+                  type: string
+                  description: 認證內容（API key, token, password 等）
+                credential_type:
+                  type: string
+                  enum: [api_key, oauth_token, password, custom]
+                  description: 認證類型
+              required: [name, secret]
+      responses:
+        '201':
+          description: 認證已建立
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  name:
+                    type: string
+                  created_at:
+                    type: string
+                    format: date-time
+
+    get:
+      summary: 列出所有認證（不含 secret）
+      tags: [Credentials]
+      description: 僅返回認證名稱和類型，不洩露實際 secret
+      responses:
+        '200':
+          description: 認證列表
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    name:
+                      type: string
+                    credential_type:
+                      type: string
+                    created_at:
+                      type: string
+
+  /credentials/{name}:
+    delete:
+      summary: 刪除認證
+      tags: [Credentials]
+      parameters:
+        - name: name
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: 認證已刪除
+        '404':
+          description: 認證不存在
+
+  /credentials/{name}/secret:
+    get:
+      summary: 取得解密 secret（Cypher Executor 內部用）
+      tags: [Credentials]
+      parameters:
+        - name: name
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: 解密後的 secret
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  name:
+                    type: string
+                  secret:
+                    type: string
+        '404':
+          description: 認證不存在
+
+components:
+  securitySchemes:
+    PartnerKey:
+      type: apiKey
+      in: header
+      name: Authorization
+
+tags:
+  - name: Cypher Executor
+    description: 工作流定義與執行引擎
+  - name: Webhooks
+    description: 將工作流固化為 HTTP 端點或 Cron 任務
+  - name: Components
+    description: 零件倉庫（內建 + 自定義）
+  - name: Credentials
+    description: 認證儲存與安全注入
+  - name: Documentation
+    description: OpenAPI 與互動文檔
