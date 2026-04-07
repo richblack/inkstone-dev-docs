@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>u6u MCP Tools Catalog</title>
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; line-height: 1.6; color: #333; max-width: 900px; margin: 0 auto; padding: 20px; background: #f9f9f9; }
+        header { border-bottom: 2px solid #eee; margin-bottom: 30px; padding-bottom: 10px; display: flex; justify-content: space-between; align-items: center; }
+        h1 { margin: 0; color: #000; font-size: 24px; }
+        .badge { background: #0070f3; color: white; padding: 2px 8px; border-radius: 4px; font-size: 12px; vertical-align: middle; }
+        .tool-card { background: white; border: 1px solid #eaeaea; border-radius: 8px; padding: 20px; margin-bottom: 20px; box-shadow: 0 2px 4px rgba(0,0,0,0.02); }
+        .tool-name { font-family: monospace; font-size: 18px; font-weight: bold; color: #d32f2f; margin-bottom: 10px; }
+        .tool-desc { color: #666; margin-bottom: 15px; }
+        .params-table { width: 100%; border-collapse: collapse; font-size: 14px; }
+        .params-table th, .params-table td { border: 1px solid #eee; padding: 8px; text-align: left; }
+        .params-table th { background: #f5f5f5; }
+        code { background: #f0f0f0; padding: 2px 4px; border-radius: 4px; font-family: monospace; }
+        .actions { margin-top: 40px; text-align: center; border-top: 1px solid #eee; padding-top: 20px; }
+        .btn { display: inline-block; background: #000; color: white; padding: 10px 20px; text-decoration: none; border-radius: 6px; font-weight: bold; transition: background 0.2s; }
+        .btn:hover { background: #333; }
+        .btn-outline { background: transparent; border: 1px solid #000; color: #000; margin-left: 10px; }
+        .btn-outline:hover { background: #f0f0f0; }
+    </style>
+</head>
+<body>
+    <header>
+        <h1>💎 u6u MCP Tools <span class="badge">v1.0.0</span></h1>
+        <a href="../README.md" style="font-size: 14px; color: #666;">← 回到說明文件</a>
+    </header>
+
+    <div id="loading">載入工具清單中...</div>
+    <div id="catalog"></div>
+
+    <div class="actions">
+        <h3>想直接測試這些工具嗎？</h3>
+        <p>使用 MCP Inspector 在沙盒中模擬 AI 對話並呼叫工具。</p>
+        <a href="https://mcp-inspector.com/?url=https://dev.finally.click/sse" target="_blank" class="btn">啟動 MCP Inspector (Remote)</a>
+        <a href="https://dev.finally.click/sse" target="_blank" class="btn btn-outline">查看 SSE 端點</a>
+    </div>
+
+    <script>
+        async function fetchCatalog() {
+            try {
+                const response = await fetch('/tools/catalog');
+                const data = await response.json();
+                renderCatalog(data.tools);
+                document.getElementById('loading').style.display = 'none';
+            } catch (e) {
+                document.getElementById('loading').innerHTML = '<span style="color:red">無法載入目錄，請檢查伺服器狀態。</span>';
+            }
+        }
+
+        function renderCatalog(tools) {
+            const container = document.getElementById('catalog');
+            tools.forEach(tool => {
+                const card = document.createElement('div');
+                card.className = 'tool-card';
+                
+                let paramsHtml = '';
+                if (tool.parameters) {
+                    paramsHtml = `
+                        <table class="params-table">
+                            <thead><tr><th>參數名稱</th><th>說明 / 類型</th></tr></thead>
+                            <tbody>
+                                ${Object.entries(tool.parameters).map(([name, desc]) => `
+                                    <tr>
+                                        <td><code>${name}</code></td>
+                                        <td>${desc}</td>
+                                    </tr>
+                                `).join('')}
+                            </tbody>
+                        </table>
+                    `;
+                }
+
+                card.innerHTML = `
+                    <div class="tool-name">${tool.name}</div>
+                    <div class="tool-desc">${tool.description}</div>
+                    ${paramsHtml}
+                `;
+                container.appendChild(card);
+            });
+        }
+
+        fetchCatalog();
+    </script>
+</body>
+</html>
