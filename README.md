@@ -119,7 +119,7 @@ Telegram Notifier 編號 abc-123-456 ✅ 有此零件
 
 ```bash
 curl -X POST "https://workflow.finally.click/cypher/execute" \
-  -H "Authorization: Bearer YOUR_API_KEY" \
+  -H "X-Api-Key: YOUR_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{
     "triplets": ["input >> 完成後 >> hello-world"],
@@ -128,6 +128,54 @@ curl -X POST "https://workflow.finally.click/cypher/execute" \
 ```
 
 > 暫時還沒有自動化 API Key 的流程
+
+---
+
+## 🤖 AI 優先：MCP Server 設置 (Model Context Protocol)
+
+u6u 不僅是為人類設計的，更是為 **AI 代理 (AI Agents)** 原生設計的。
+我們提供標準的 **Model Context Protocol (MCP)** 伺服器，讓 Claude.ai、Cursor 或任何支援 MCP 的工具能直接具備「建立」與「管理」工作流的能力。
+
+### 1. Claude Desktop 配置
+在 `~/Library/Application Support/Claude/claude_desktop_config.json` 加入：
+
+```json
+{
+  "mcpServers": {
+    "u6u": {
+      "command": "npx",
+      "args": ["-y", "@u6u/mcp-server"],
+      "env": {
+        "U6U_API_KEY": "你的_API_KEY"
+      }
+    }
+  }
+}
+```
+
+> **注意**：如果你正在開發中，也可以指向本地路徑或使用 SSE URL：`https://mcp.finally.click/sse`
+
+### 2. Cursor 配置
+在 `Cursor Settings > MCP` 中新增：
+- **Name**: `u6u`
+- **Type**: `command` (npx) 或 `sse`
+- **Value**: `https://mcp.finally.click/sse` (Headers: `X-Api-Key: YOUR_API_KEY`)
+
+### 3. AI 具備的超能力 (Tools)
+
+當你連接上 u6u MCP 後，AI 將獲得以下核心工具：
+
+- **`u6u_search_components`**：AI 會將你的自然語言需求拆解為三元組 (Triplets)，並自動搜尋現有的零件庫。
+- **`u6u_execute_workflow`**：AI 可以在沙盒環境中即時測試它設計的工作流。
+- **`u6u_deploy_workflow`**：當測試通過，AI 可以幫你正式發佈工作流，並設定 Webhook 或 Cron 排程。
+- **`u6u_publish_component`**：如果發現缺件，AI 可以直接撰寫代碼或 Gherkin 劇本並發佈一個新的零件。
+
+### 📖 動態工具文檔 (Live Docs)
+為了確保開發者看到的工具定義與程式碼始終同步，我們提供以下自動生成的文件端點：
+
+- **動態 JSON 目錄**: [https://mcp.finally.click/tools/catalog](https://mcp.finally.click/tools/catalog) — *永遠與代碼 100% 同步。*
+- **互動式測試界面**: [透過 dev.finally.click 啟動 MCP Inspector](https://dev.finally.click/mcp-inspector?url=https://mcp.finally.click/sse) — *在瀏覽器直接呼叫工具。*
+
 ---
 
 ## 🛠 開發者工具箱
@@ -141,8 +189,13 @@ curl -X POST "https://workflow.finally.click/cypher/execute" \
 - [執行引擎介面](https://workflow.finally.click/docs#/Cypher%20Executor)
 
 ### 3. 認證系統 (Credentials)
-安全地儲存你的第三方 API Keys，並在執行時動態注入。
-- [認證管理介面](https://workflow.finally.click/docs#/Credentials)
+> ⚠️ **開發中**：目前採手動發放 API Key 模式，認證管理界面僅供內部 (Admin) 使用，暫不對外開放。
+
+---
+
+### 4. 進階開發指南
+如果你是工程師，想了解三元組 (Triplet) 語法、如何自建零件或使用 Markdown 進行開發：
+- 請參閱 [GUIDE.md](./GUIDE.md)
 
 ---
 
@@ -155,8 +208,8 @@ curl -X POST "https://workflow.finally.click/cypher/execute" \
 ## 🤝 貢獻與反饋
 
 如果你在開發過程中遇到任何問題，或有新的零件構想：
-1. 查閱 [GUIDE.md](./GUIDE.md)
-2. 透過 [finally.click](https://finally.click) 聯繫我們。
+1. 透過 [finally.click](https://finally.click) 聯繫我們。
+2. 參考 [GUIDE.md](./GUIDE.md) (進階開發指南)
 
 ---
 © 2026 **InkStone Co.** | *Building AI-First Infrastructure.*
